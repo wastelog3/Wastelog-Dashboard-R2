@@ -23,6 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const geofenceTableBody = document.querySelector('#geofenceTable tbody');
     const eventPopover = document.getElementById('event-popover');
     
+    // Elemen untuk kartu hasil pengukuran manual
     const manualMeasureResultCard = document.getElementById('manualMeasureResultCard');
     const manualVolumeEl = document.getElementById('manualVolume');
     const manualDistanceEl = document.getElementById('manualDistance');
@@ -61,9 +62,11 @@ document.addEventListener("DOMContentLoaded", () => {
         ws.onopen = () => console.log('WebSocket terhubung!');
         ws.onmessage = (event) => {
             try {
+                // Logika ini disesuaikan untuk menerima data manual juga
                 const data = JSON.parse(event.data);
-                if (data.deviceId !== DEVICE_ID) return; 
+                if (data.deviceId !== DEVICE_ID) return; // Hanya proses data untuk device ini
 
+                // Jika data lokasi dari GPS
                 if (data.latitude && data.longitude) {
                     const newLatLng = [data.latitude, data.longitude];
                     if(vehicleMarker) {
@@ -72,8 +75,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 }
                 
+                // Jika data pengukuran manual
+                // Alur Node-RED akan meneruskan pesan jika source='manual'
                 if (data.source === 'manual' && data.event === 'VOLUME_MEASUREMENT') {
                     console.log('Menerima update pengukuran manual via WebSocket:', data);
+                    // Update kartu secara real-time
                     manualVolumeEl.textContent = `${data.calculatedVolume_liter.toFixed(2)} Liter`;
                     manualDistanceEl.textContent = `${data.distance_cm} cm`;
                     manualTimestampEl.textContent = new Date(data.timestamp).toLocaleString('id-ID');
@@ -159,11 +165,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify({ trigger: true, deviceId: DEVICE_ID }) 
             });
 
-            if (response.status !== 202) {
+            if (response.status !== 202) { 
                 throw new Error(`Server menolak perintah. Status: ${response.status}`);
             }
             
             manualMeasureBtn.innerHTML = `<i class="fas fa-check"></i> <span class="nav-text">Terkirim</span>`;
+
         } catch (error) { 
             console.error('Gagal memicu pengukuran manual:', error); 
             alert(`Gagal memicu pengukuran manual. \n\nError: ${error.message}`);
@@ -234,7 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
       
-    // --- KALENDER SETUP & LOGIKA ---
+    // --- KALENDER SETUP & LOGIKA (DISESUAIKAN) ---
     const formatTime = (dateStr) => dateStr ? new Date(dateStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(/\./g,':') : '-';
     const formatDuration = (seconds) => (seconds === null || seconds === undefined) ? '-' : `${Math.round(seconds / 60)} menit`;
     const formatVolume = (liters) => (liters === null || liters === undefined) ? '-' : `${liters.toFixed(2)} L`;
@@ -246,12 +253,12 @@ document.addEventListener("DOMContentLoaded", () => {
         buttonText: { dayGridMonth: 'Bulan', dayGridWeek: 'Minggu', listWeek: 'Daftar' },
         eventContent: (arg) => { /* Tidak ada perubahan di sini */ },
         
-        // --- PERUBAHAN 3: PERBARUI TAMPILAN DETAIL EVENT ---
+        // --- PENYESUAIAN 2: PERBARUI TAMPILAN DETAIL EVENT ---
         eventClick: (info) => {
             const visit = info.event.extendedProps;
             const measurement = visit.measurement || {};
 
-            // Menggunakan backtick (`) untuk membuat template string HTML
+            // Menggunakan backtick (`) untuk membuat template string HTML yang lebih mudah dibaca
             const popoverContent = `
                 <h5>${visit.areaName || 'Detail Kunjungan'}</h5>
                 <hr>
@@ -279,16 +286,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     calendar.render();
 
-    // --- PERUBAHAN 2: SEDERHANAKAN FUNGSI PENGAMBILAN DATA ---
+    // --- PENYESUAIAN 1: SEDERHANAKAN FUNGSI PENGAMBILAN DATA ---
     const fetchHistoryAndRender = async () => {
         try {
-            // Endpoint API sudah benar, karena kita telah memperbaikinya di Node-RED
+            // Endpoint API ini harus sudah diperbarui di Node-RED untuk membaca dari 'visit_logs'
             const response = await fetch(`${NODE_RED_URL}/api/history`);
-            if (!response.ok) throw new Error("Gagal mengambil data histori");
+            if (!response.ok) throw new Error("Gagal mengambil data histori dari server");
     
             const visitLogs = await response.json();
             
-            // Logika menjadi sangat sederhana karena data sudah lengkap
+            // Logika baru yang lebih sederhana, langsung memetakan data yang sudah lengkap
             const calendarEvents = visitLogs.map(visit => {
                 const title = visit.areaName || 'Area Tidak Dikenal';
                 const startTime = visit.entryTime || new Date().toISOString();
@@ -296,7 +303,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return {
                     title: title,
                     start: startTime,
-                    // extendedProps sekarang berisi SEMUA data dari visit_logs
+                    // extendedProps sekarang berisi SEMUA data dari dokumen visit_logs
                     extendedProps: visit 
                 };
             });
@@ -314,9 +321,9 @@ document.addEventListener("DOMContentLoaded", () => {
         fetchInitialVehicleLocation(); 
         connectWebSocket();
         fetchAndDisplayGeofences().then(() => {
-            fetchHistoryAndRender();
+            fetchHistoryAndRender(); // Panggil setelah geofence dimuat agar nama area tersedia
         });
-        setInterval(fetchHistoryAndRender, 60000); 
+        setInterval(fetchHistoryAndRender, 60000); // Refresh data setiap 60 detik
     };
 
     initializeDashboard();
